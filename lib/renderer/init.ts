@@ -74,7 +74,8 @@ switch (window.location.protocol) {
   }
   case 'chrome-extension:': {
     // Inject the chrome.* APIs that chrome extensions require
-    require('@electron/internal/renderer/chrome-api').injectTo(window.location.hostname, isBackgroundPage, window)
+    const ipcRendererUtils = require('@electron/internal/renderer/ipc-renderer-internal-utils')
+    require('@electron/internal/renderer/chrome-api').injectTo(window.location.hostname, isBackgroundPage, window, ipcRendererUtils)
     break
   }
   case 'chrome:':

@@ -1,5 +1,7 @@
-import { ipcRendererInternal } from '@electron/internal/renderer/ipc-renderer-internal'
 import { webFrame } from 'electron'
+
+import { ipcRendererInternal } from '@electron/internal/renderer/ipc-renderer-internal'
+import * as ipcRendererUtils from '@electron/internal/renderer/ipc-renderer-internal-utils'
 
 const v8Util = process.atomBinding('v8_util')
 
@@ -36,7 +38,7 @@ const runContentScript = function (this: any, extensionId: string, url: string, 
     (extensionWorldId[extensionId] = getIsolatedWorldIdForInstance())
 
   // store extension ID for content script to read in isolated world
-  v8Util.setHiddenValue(global, `extension-${worldId}`, extensionId)
+  v8Util.setHiddenValue(global, `extension-${worldId}`, { extensionId, ipcRendererUtils })
 
   webFrame.setIsolatedWorldInfo(worldId, {
     name: `${extensionId} [${worldId}]`
@@ -45,7 +47,7 @@ const runContentScript = function (this: any, extensionId: string, url: string, 
   })
 
   const sources = [{ code, url }]
-  webFrame.executeJavaScriptInIsolatedWorld(worldId, sources)
+  return webFrame.executeJavaScriptInIsolatedWorld(worldId, sources)
 }
 
 const runAllContentScript = function (scripts: Array<Electron.InjectionBase>, extensionId: string) {
@@ -102,8 +104,9 @@ ipcRendererInternal.on('CHROME_TABS_EXECUTESCRIPT', function (
   url: string,
   code: string
 ) {
-  const result = runContentScript.call(window, extensionId, url, code)
-  ipcRendererInternal.sendToAll(senderWebContentsId, `CHROME_TABS_EXECUTESCRIPT_RESULT_${requestId}`, result)
+  runContentScript.call(window, extensionId, url, code).then(result => {
+    ipcRendererInternal.sendToAll(senderWebContentsId, `CHROME_TABS_EXECUTESCRIPT_RESULT_${requestId}`, result)
+  })
 })
 
 module.exports = (getRenderProcessPreferences: typeof process.getRenderProcessPreferences) => {

@@ -1,5 +1,4 @@
-import { ipcRendererInternal } from '@electron/internal/renderer/ipc-renderer-internal'
-import * as ipcRendererUtils from '@electron/internal/renderer/ipc-renderer-internal-utils'
+import * as ipcRendererUtilsModule from '@electron/internal/renderer/ipc-renderer-internal-utils'
 import * as url from 'url'
 
 // Todo: Import once extensions have been turned into TypeScript
@@ -31,16 +30,16 @@ class Port {
   public onMessage = new Event()
   public sender: MessageSender
 
-  constructor (public tabId: number, public portId: number, extensionId: string, public name: string) {
+  constructor (public tabId: number, public portId: number, extensionId: string, public name: string, private ipc: Electron.IpcRendererInternal) {
     this.onDisconnect = new Event()
     this.onMessage = new Event()
     this.sender = new MessageSender(tabId, extensionId)
 
-    ipcRendererInternal.once(`CHROME_PORT_DISCONNECT_${portId}`, () => {
+    this.ipc.once(`CHROME_PORT_DISCONNECT_${portId}`, () => {
       this._onDisconnect()
     })
 
-    ipcRendererInternal.on(`CHROME_PORT_POSTMESSAGE_${portId}`, (
+    this.ipc.on(`CHROME_PORT_POSTMESSAGE_${portId}`, (
       _event: Electron.Event, message: string
     ) => {
       const sendResponse = function () { console.error('sendResponse is not implemented') }
@@ -51,30 +50,32 @@ class Port {
   disconnect () {
     if (this.disconnected) return
 
-    ipcRendererInternal.sendToAll(this.tabId, `CHROME_PORT_DISCONNECT_${this.portId}`)
+    this.ipc.sendToAll(this.tabId, `CHROME_PORT_DISCONNECT_${this.portId}`)
     this._onDisconnect()
   }
 
   postMessage (message: string) {
-    ipcRendererInternal.sendToAll(this.tabId, `CHROME_PORT_POSTMESSAGE_${this.portId}`, message)
+    this.ipc.sendToAll(this.tabId, `CHROME_PORT_POSTMESSAGE_${this.portId}`, message)
   }
 
   _onDisconnect () {
     this.disconnected = true
-    ipcRendererInternal.removeAllListeners(`CHROME_PORT_POSTMESSAGE_${this.portId}`)
+    this.ipc.removeAllListeners(`CHROME_PORT_POSTMESSAGE_${this.portId}`)
     this.onDisconnect.emit()
   }
 }
 
 // Inject chrome API to the |context|
-export function injectTo (extensionId: string, isBackgroundPage: boolean, context: any) {
+export function injectTo (extensionId: string, isBackgroundPage: boolean, context: any, ipcRendererUtils: typeof ipcRendererUtilsModule) {
   const chrome = context.chrome = context.chrome || {}
   let originResultID = 1
+
+  const ipcRendererInternal = ipcRendererUtils.ipc
 
   ipcRendererInternal.on(`CHROME_RUNTIME_ONCONNECT_${extensionId}`, (
     _event: Electron.Event, tabId: number, portId: number, connectInfo: { name: string }
   ) => {
-    chrome.runtime.onConnect.emit(new Port(tabId, portId, extensionId, connectInfo.name))
+    chrome.runtime.onConnect.emit(new Port(tabId, portId, extensionId, connectInfo.name, ipcRendererInternal))
   }
   )
 
@@ -130,7 +131,7 @@ export function injectTo (extensionId: string, isBackgroundPage: boolean, contex
       }
 
       const { tabId, portId } = ipcRendererInternal.sendSync('CHROME_RUNTIME_CONNECT', targetExtensionId, connectInfo)
-      return new Port(tabId, portId, extensionId, connectInfo.name)
+      return new Port(tabId, portId, extensionId, connectInfo.name, ipcRendererInternal)
     },
 
     // https://developer.chrome.com/extensions/runtime#method-sendMessage
@@ -217,7 +218,7 @@ export function injectTo (extensionId: string, isBackgroundPage: boolean, contex
     onMessage: chrome.runtime.onMessage
   }
 
-  chrome.storage = require('@electron/internal/renderer/extensions/storage').setup(extensionId)
+  chrome.storage = require('@electron/internal/renderer/extensions/storage').setup(extensionId, ipcRendererUtils)
 
   chrome.pageAction = {
     show () {},
@@ -229,6 +230,6 @@ export function injectTo (extensionId: string, isBackgroundPage: boolean, contex
     getPopup () {}
   }
 
-  chrome.i18n = require('@electron/internal/renderer/extensions/i18n').setup(extensionId)
-  chrome.webNavigation = require('@electron/internal/renderer/extensions/web-navigation').setup()
+  chrome.i18n = require('@electron/internal/renderer/extensions/i18n').setup(extensionId, ipcRendererUtils)
+  chrome.webNavigation = require('@electron/internal/renderer/extensions/web-navigation').setup(ipcRendererInternal)
 }

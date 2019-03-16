@@ -43,3 +43,5 @@ export function invokeSync<T> (command: string, ...args: any[]): T {
     return result
   }
 }
+
+export const ipc = ipcRendererInternal
