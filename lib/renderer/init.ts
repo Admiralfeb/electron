@@ -49,7 +49,6 @@ const contextIsolation = hasSwitch('context-isolation')
 const nodeIntegration = hasSwitch('node-integration')
 const webviewTag = hasSwitch('webview-tag')
 const isHiddenPage = hasSwitch('hidden-page')
-const isBackgroundPage = hasSwitch('background-page')
 const usesNativeWindowOpen = hasSwitch('native-window-open')
 
 const preloadScript = parseOption('preload', null)
@@ -75,7 +74,7 @@ switch (window.location.protocol) {
   case 'chrome-extension:': {
     // Inject the chrome.* APIs that chrome extensions require
     const ipcRendererUtils = require('@electron/internal/renderer/ipc-renderer-internal-utils')
-    require('@electron/internal/renderer/chrome-api').injectTo(window.location.hostname, isBackgroundPage, window, ipcRendererUtils)
+    require('@electron/internal/renderer/chrome-api').injectTo(window.location.hostname, window, ipcRendererUtils)
     break
   }
   case 'chrome:':
